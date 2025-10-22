@@ -36,7 +36,7 @@ async function getUser(id: string) {
     return newUser
 }
 
-client.on("ready", async (client) => {
+client.on("clientReady", async (client) => {
     const lang = new Map<string, string>()
     language.forEach(e => lang.set(e.language, e.code))
     const commands = [
@@ -182,35 +182,40 @@ client.on("messageCreate", async (message) => {
     if(message.webhookId) return;
     if(!message.inGuild()) return;
     if(!message.member || !message.member.voice.channel) return;
-    const connection = getVoiceConnection(message.guildId as string);
-    if(!connection || !(connection.joinConfig.channelId === message.member.voice.channel.id)) return;
-    const user = await getUser(message.author.id);
-    let msgTts = ""
-    if(user.readUserName && !user.readUserName) msgTts = msgTts + `${user.nickname ? user.nickname.length > 0 ? user.nickname : message.member?.nickname : message.member?.nickname} said `
-    msgTts = msgTts + message.content
-    const lang = user.language ||  "th-TH"
-    let model = language.find(e => e.code == (user.language || "th-TH"))
-    if(!model)  language.find(e => e.code == "th-TH")
-    const [result] = await ttsClient.synthesizeSpeech({
-        input: {
-            text: msgTts
-        },
-        voice: {
-            languageCode: lang,
-            name: model?.model,
-            ssmlGender: model?.gender as "FEMALE" | "MALE"
-        },
-        audioConfig: {audioEncoding: 'MP3'},
-    })
-    if(!result.audioContent) return;
-    if(!connection) return 
-    const player = createAudioPlayer({
-    });
-    const readable = Readable.from(result.audioContent);
+    try {
+        const connection = getVoiceConnection(message.guildId as string);
+        if(!connection || !(connection.joinConfig.channelId === message.member.voice.channel.id)) return;
+        const user = await getUser(message.author.id);
+        let msgTts = ""
+        const displayeName = message.member.displayName || message.member.user.displayName
+        if(user.readUserName == 0) msgTts = msgTts + `${user.nickname ? user.nickname.length > 0 ? user.nickname : displayeName : displayeName} said `
+        msgTts = msgTts + message.content
+        const lang = user.language ||  "th-TH"
+        let model = language.find(e => e.code == (user.language || "th-TH") && e?.model == user.model)
+        if(!model)  language.find(e => e.code == "th-TH")
+        const [result] = await ttsClient.synthesizeSpeech({
+            input: {
+                text: msgTts
+            },
+            voice: {
+                languageCode: lang,
+                name: model?.model,
+                ssmlGender: model?.gender as "FEMALE" | "MALE"
+            },
+            audioConfig: {audioEncoding: 'MP3'},
+        })
+        if(!result.audioContent) return;
+        if(!connection) return 
+        const player = createAudioPlayer({
+        });
+        const readable = Readable.from(result.audioContent);
 
-    let resource = createAudioResource(readable)
-    player.play(resource);
-    connection.subscribe(player)
+        let resource = createAudioResource(readable)
+        player.play(resource);
+        connection.subscribe(player)
+    } catch (error) {
+        console.error(error)
+    }
 })
 
 

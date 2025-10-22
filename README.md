@@ -32,7 +32,7 @@ DISCORD_GUILD_ID=your_server_id
 DB_FILE_NAME=file:local.db
 ```
 
-‼️ You need insert key from gcp account service json file on google and rename into `google.json` remove `auth.exmaple.json` too
+‼️ You need insert key from gcp account service json file on google and rename into `exmaple.json` remove `auth.exmaple.json` too
 
 ### 3️⃣ Build & Run
 ```

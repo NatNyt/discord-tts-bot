@@ -1,0 +1,41 @@
+{
+  "compilerOptions": {
+    /* === Project === */
+    "target": "ES2022",                      // Discord.js uses modern JS features
+    "module": "ESNext",                      // Use native ESM for import/export
+    "moduleResolution": "Bundler",           // Recommended for ESM + modern bundlers
+    "lib": ["ESNext", "DOM"],                // Includes async iterables, fetch, etc.
+    "outDir": "dist",                        // Output folder for compiled JS
+    "rootDir": "src",                        // Source folder
+    "allowJs": false,
+    "noEmitOnError": true,
+
+    /* === Type Safety === */
+    "strict": true,                          // Enables all strict checks
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,                    // Speeds up build, safe for Discord.js
+
+    /* === Node Compatibility === */
+    "moduleDetection": "force",
+    "types": ["node"],                       // Node global types
+    "esModuleInterop": true,                 // Allows default imports for CommonJS modules
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+
+    /* === Paths / Aliases (Optional) === */
+    "baseUrl": "./src",
+    "paths": {
+      "@/*": ["*"]
+    },
+
+    /* === Emit === */
+    "sourceMap": true,                       // For debugging with sourcemaps
+    "declaration": true,                     // Generate .d.ts files
+    "declarationMap": true
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist", "tests"]
+}

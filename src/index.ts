@@ -1,7 +1,7 @@
 import {ActionRowBuilder, Client, Collection, IntentsBitField, InteractionContextType, InteractionResponse, MessageFlags, Routes, SlashCommandBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, VoiceConnectionStates} from 'discord.js';
 import { TextToSpeechClient } from '@google-cloud/text-to-speech';
 import dotenv from 'dotenv'
-import { createAudioPlayer, createAudioResource, getVoiceConnection, joinVoiceChannel, VoiceConnection } from '@discordjs/voice';
+import { AudioPlayer, AudioPlayerStatus, AudioResource, createAudioPlayer, createAudioResource, getVoiceConnection, joinVoiceChannel, VoiceConnection } from '@discordjs/voice';
 import language from './tts/language.js';
 import db from './db/index.js';
 import { usersTable } from './db/schema.js';
@@ -93,6 +93,35 @@ client.on("clientReady", async (client) => {
     console.log("Refreshing commands done !")
 })
 
+interface ConnectionState {
+    connection: VoiceConnection,
+    player: AudioPlayer
+    queue: AudioResource<null>[];
+    isPlaying: boolean
+}
+
+const connections = new Collection<string, ConnectionState>()
+const queue = new Map<string, AudioResource<null>>()
+
+function playNext(guildId: string) {
+  const g = connections.get(guildId);
+  if (!g || g.queue.length === 0) return;
+
+  const next = g.queue[0];
+
+  g.player.play(next);
+  g.connection.subscribe(g.player);
+  g.isPlaying = true;
+}
+
+function enqueue(guildId: string, audioContent: AudioResource<null>) {
+  const guildQueue = connections.get(guildId);
+  if(!guildQueue) return;
+  guildQueue.queue.push(audioContent);
+  if (!guildQueue.isPlaying) playNext(guildId);
+}
+
+
 client.on("interactionCreate", async (interaction) => {
     if(interaction.isStringSelectMenu() && interaction.inCachedGuild() && interaction.customId == "select_model") {
         const value = interaction.values[0];
@@ -114,10 +143,27 @@ client.on("interactionCreate", async (interaction) => {
             content: "Please join vc first !",
             flags: [MessageFlags.Ephemeral]
         })
-        joinVoiceChannel({
+        const player = createAudioPlayer({
+        });
+        const connection = joinVoiceChannel({
             channelId: interaction.channelId,
             guildId: interaction.guildId,
             adapterCreator: interaction.guild.voiceAdapterCreator
+        })
+        connections.set(interaction.guildId, {
+            connection,
+            player,
+            queue: [],
+            isPlaying: false
+        })
+        player.on("stateChange", (oldStatem, newState) => {
+            if(newState.status == AudioPlayerStatus.Idle){
+                const g = connections.get(interaction.guildId);
+                if (!g) return;
+                g.queue.shift();
+                if (g.queue.length > 0) playNext(interaction.guildId);
+                else g.isPlaying = false;
+            }
         })
         interaction.reply({
             content: "I joined your voice channels",
@@ -183,8 +229,8 @@ client.on("messageCreate", async (message) => {
     if(!message.inGuild()) return;
     if(!message.member || !message.member.voice.channel) return;
     try {
-        const connection = getVoiceConnection(message.guildId as string);
-        if(!connection || !(connection.joinConfig.channelId === message.member.voice.channel.id)) return;
+        const connection = connections.get(message.guildId)
+        if(!connection || !(connection.connection.joinConfig.channelId === message.member.voice.channel.id)) return;
         const user = await getUser(message.author.id);
         let msgTts = ""
         const displayeName = message.member.displayName || message.member.user.displayName
@@ -205,14 +251,11 @@ client.on("messageCreate", async (message) => {
             audioConfig: {audioEncoding: 'MP3'},
         })
         if(!result.audioContent) return;
-        if(!connection) return 
-        const player = createAudioPlayer({
-        });
+        if(!connection) return;
+        
         const readable = Readable.from(result.audioContent);
-
         let resource = createAudioResource(readable)
-        player.play(resource);
-        connection.subscribe(player)
+        enqueue(message.guildId, resource)
     } catch (error) {
         console.error(error)
     }

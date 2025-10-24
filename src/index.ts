@@ -1,7 +1,7 @@
 import {ActionRowBuilder, Client, Collection, IntentsBitField, InteractionContextType, InteractionResponse, MessageFlags, Routes, SlashCommandBuilder, StringSelectMenuBuilder, StringSelectMenuOptionBuilder, VoiceConnectionStates} from 'discord.js';
 import { TextToSpeechClient } from '@google-cloud/text-to-speech';
 import dotenv from 'dotenv'
-import { AudioPlayer, AudioPlayerStatus, AudioResource, createAudioPlayer, createAudioResource, getVoiceConnection, joinVoiceChannel, VoiceConnection } from '@discordjs/voice';
+import { AudioPlayer, AudioPlayerStatus, AudioResource, createAudioPlayer, createAudioResource, demuxProbe, getVoiceConnection, joinVoiceChannel, VoiceConnection } from '@discordjs/voice';
 import language from './tts/language.js';
 import db from './db/index.js';
 import { usersTable } from './db/schema.js';
@@ -223,6 +223,11 @@ client.on("interactionCreate", async (interaction) => {
     }
 })
 
+async function probeAndCreateResource(readableStream: Readable) {
+	const { stream, type } = await demuxProbe(readableStream);
+	return createAudioResource(stream, { inputType: type });
+}
+
 client.on("messageCreate", async (message) => {
     if(message.author.bot) return;
     if(message.webhookId) return;
@@ -248,13 +253,15 @@ client.on("messageCreate", async (message) => {
                 name: model?.model,
                 ssmlGender: model?.gender as "FEMALE" | "MALE"
             },
-            audioConfig: {audioEncoding: 'MP3'},
+            audioConfig: {audioEncoding: "OGG_OPUS"},
         })
         if(!result.audioContent) return;
         if(!connection) return;
         
-        const readable = Readable.from(result.audioContent);
-        let resource = createAudioResource(readable)
+        const readable = Readable.from(result.audioContent, {
+            objectMode: false
+        });
+        let resource = await probeAndCreateResource(readable);
         enqueue(message.guildId, resource)
     } catch (error) {
         console.error(error)
